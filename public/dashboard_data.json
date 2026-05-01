@@ -224,6 +224,307 @@
       "pedir decisão": 1
     }
   },
+  "rotinas_correcao": [
+    {
+      "tipo": "pedir decisão",
+      "pacote": "implantação/topografia",
+      "total": 1,
+      "complexidade_dominante": "E4 bloqueado",
+      "escolas": [
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Registrar a decisão pendente, preparar evidência visual e encaminhar para coordenação/gestão antes de alterar o RVT.",
+        "Checar implantação, limites, níveis, taludes, acessos e relação com o terreno.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "apresentar documento",
+      "pacote": "documentos assinados",
+      "total": 63,
+      "complexidade_dominante": "E3 alto",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT",
+        "JUÍNA - EZEQUIEL RAMIN",
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Separar documentação técnica do pacote e conferir se há RRT/ART, assinatura, memorial ou prancha faltante.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Gerar ou anexar o documento faltante e refletir no índice/lista de pranchas quando aplicável.",
+        "Conferir identificação da escola, disciplina, responsável técnico, data e revisão.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "corrigir prancha",
+      "pacote": "acessibilidade",
+      "total": 6,
+      "complexidade_dominante": "E3 alto",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT",
+        "JUÍNA - EZEQUIEL RAMIN",
+        "SINOP - E E SANTA CECÍLIA"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Ajustar cotas, legendas, carimbo, notas e representação gráfica na vista ou na folha.",
+        "Checar rampas, corrimãos, guarda-corpo, piso tátil, circulação e cotas conforme NBR 9050.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "revisar norma",
+      "pacote": "acessibilidade",
+      "total": 6,
+      "complexidade_dominante": "E3 alto",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT",
+        "JUÍNA - EZEQUIEL RAMIN",
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Conferir exigência normativa, ajustar família/elemento/cota e registrar a referência técnica.",
+        "Checar rampas, corrimãos, guarda-corpo, piso tátil, circulação e cotas conforme NBR 9050.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "compatibilizar modelo",
+      "pacote": "acessibilidade",
+      "total": 1,
+      "complexidade_dominante": "E3 alto",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Corrigir conflito de locação, nível, elemento ou referência entre modelo, vistas e prancha.",
+        "Checar rampas, corrimãos, guarda-corpo, piso tátil, circulação e cotas conforme NBR 9050.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "triagem técnica",
+      "pacote": "implantação/topografia",
+      "total": 9,
+      "complexidade_dominante": "E2 médio",
+      "escolas": [
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Executar a correção no modelo ou na prancha, evitando ajuste apenas visual quando houver impacto de modelo.",
+        "Checar implantação, limites, níveis, taludes, acessos e relação com o terreno.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "revisar norma",
+      "pacote": "cobertura/quadra",
+      "total": 4,
+      "complexidade_dominante": "E2 médio",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT",
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Conferir exigência normativa, ajustar família/elemento/cota e registrar a referência técnica.",
+        "Checar cobertura, quadra, vestiários, calhas/rufos e interferências de implantação.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "triagem técnica",
+      "pacote": "cobertura/quadra",
+      "total": 30,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT",
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Executar a correção no modelo ou na prancha, evitando ajuste apenas visual quando houver impacto de modelo.",
+        "Checar cobertura, quadra, vestiários, calhas/rufos e interferências de implantação.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "corrigir prancha",
+      "pacote": "triagem operacional",
+      "total": 26,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT",
+        "JUÍNA - EZEQUIEL RAMIN",
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Ajustar cotas, legendas, carimbo, notas e representação gráfica na vista ou na folha.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "apresentar documento",
+      "pacote": "licenças/TRP",
+      "total": 19,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "JUÍNA - EZEQUIEL RAMIN"
+      ],
+      "checklist_revit": [
+        "Separar documentação técnica do pacote e conferir se há RRT/ART, assinatura, memorial ou prancha faltante.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Gerar ou anexar o documento faltante e refletir no índice/lista de pranchas quando aplicável.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "corrigir prancha",
+      "pacote": "cobertura/quadra",
+      "total": 19,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT",
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Ajustar cotas, legendas, carimbo, notas e representação gráfica na vista ou na folha.",
+        "Checar cobertura, quadra, vestiários, calhas/rufos e interferências de implantação.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "corrigir prancha",
+      "pacote": "implantação/topografia",
+      "total": 14,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "JUÍNA - EE FLAMBOYANT",
+        "JUÍNA - EZEQUIEL RAMIN",
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Ajustar cotas, legendas, carimbo, notas e representação gráfica na vista ou na folha.",
+        "Checar implantação, limites, níveis, taludes, acessos e relação com o terreno.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "corrigir prancha",
+      "pacote": "orçamento/executivo",
+      "total": 9,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E JARDIM GLÓRIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Ajustar cotas, legendas, carimbo, notas e representação gráfica na vista ou na folha.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "compatibilizar modelo",
+      "pacote": "orçamento/executivo",
+      "total": 2,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "SINOP - E E SANTA CECÍLIA",
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Corrigir conflito de locação, nível, elemento ou referência entre modelo, vistas e prancha.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "compatibilizar modelo",
+      "pacote": "implantação/topografia",
+      "total": 1,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "VÁRZEA GRANDE - E E SÃO SIMÃO"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Corrigir conflito de locação, nível, elemento ou referência entre modelo, vistas e prancha.",
+        "Checar implantação, limites, níveis, taludes, acessos e relação com o terreno.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    },
+    {
+      "tipo": "triagem técnica",
+      "pacote": "triagem operacional",
+      "total": 1,
+      "complexidade_dominante": "E1 rápido",
+      "escolas": [
+        "JUÍNA - EZEQUIEL RAMIN"
+      ],
+      "checklist_revit": [
+        "Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.",
+        "Conferir o apontamento no laudo antes de alterar o modelo.",
+        "Executar a correção no modelo ou na prancha, evitando ajuste apenas visual quando houver impacto de modelo.",
+        "Validar a correção em planta, corte/elevação e folha de emissão.",
+        "Exportar PDF revisado e anexar evidência ao controle de pendências."
+      ]
+    }
+  ],
   "items_ativos": [
     {
       "laudo": "1° PARECER_JUNT - 001-2026 - VÁRZEA GRANDE - E E JARDIM GLÓRIA",

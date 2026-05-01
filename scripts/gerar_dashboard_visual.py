@@ -363,6 +363,73 @@ def build_school_summary(laudo, group):
     }
 
 
+def routine_checklist(action: str, package: str):
+    base = [
+        'Abrir o RVT da escola e localizar a vista/prancha relacionada ao pacote.',
+        'Conferir o apontamento no laudo antes de alterar o modelo.',
+        'Executar a correção no modelo ou na prancha, evitando ajuste apenas visual quando houver impacto de modelo.',
+        'Validar a correção em planta, corte/elevação e folha de emissão.',
+        'Exportar PDF revisado e anexar evidência ao controle de pendências.',
+    ]
+    if action == 'corrigir prancha':
+        base[2] = 'Ajustar cotas, legendas, carimbo, notas e representação gráfica na vista ou na folha.'
+    elif action == 'compatibilizar modelo':
+        base[2] = 'Corrigir conflito de locação, nível, elemento ou referência entre modelo, vistas e prancha.'
+    elif action == 'revisar norma':
+        base[2] = 'Conferir exigência normativa, ajustar família/elemento/cota e registrar a referência técnica.'
+    elif action == 'apresentar documento':
+        base[0] = 'Separar documentação técnica do pacote e conferir se há RRT/ART, assinatura, memorial ou prancha faltante.'
+        base[2] = 'Gerar ou anexar o documento faltante e refletir no índice/lista de pranchas quando aplicável.'
+    elif action == 'pedir decisão':
+        base[2] = 'Registrar a decisão pendente, preparar evidência visual e encaminhar para coordenação/gestão antes de alterar o RVT.'
+    elif action == 'revisar orçamento':
+        base[2] = 'Atualizar quantitativos a partir do modelo/pranchas e alinhar planilha com a revisão emitida.'
+
+    if package == 'acessibilidade':
+        base.insert(3, 'Checar rampas, corrimãos, guarda-corpo, piso tátil, circulação e cotas conforme NBR 9050.')
+    elif package == 'implantação/topografia':
+        base.insert(3, 'Checar implantação, limites, níveis, taludes, acessos e relação com o terreno.')
+    elif package == 'cobertura/quadra':
+        base.insert(3, 'Checar cobertura, quadra, vestiários, calhas/rufos e interferências de implantação.')
+    elif package == 'documentos assinados':
+        base.insert(3, 'Conferir identificação da escola, disciplina, responsável técnico, data e revisão.')
+
+    return base
+
+
+def build_revit_routines(active_rows):
+    grouped = defaultdict(list)
+    for row in active_rows:
+        grouped[(row['acao_sugerida'], row['pacote_entrega'])].append(row)
+
+    routines = []
+    for (action, package), items in grouped.items():
+        cx_counts = Counter(row['complexidade'] for row in items)
+        dominant_complexity = sorted(
+            cx_counts,
+            key=lambda key: (COMPLEXITY_ORDER.get(key, 9), -cx_counts[key])
+        )[0]
+        schools = sorted({row['escola_curta'] for row in items})
+        routines.append({
+            'tipo': action,
+            'pacote': package,
+            'total': len(items),
+            'complexidade_dominante': dominant_complexity,
+            'escolas': schools,
+            'checklist_revit': routine_checklist(action, package),
+        })
+
+    return sorted(
+        routines,
+        key=lambda r: (
+            COMPLEXITY_ORDER.get(r['complexidade_dominante'], 9),
+            -r['total'],
+            r['tipo'],
+            r['pacote'],
+        )
+    )
+
+
 def write_csv(path, rows, fieldnames):
     with path.open('w', newline='', encoding='utf-8') as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction='ignore')
@@ -417,6 +484,7 @@ def build_data(rows):
             'pacotes_ativos': counter_dict(active_rows, 'pacote_entrega'),
             'acoes_ativos': counter_dict(active_rows, 'acao_sugerida'),
         },
+        'rotinas_correcao': build_revit_routines(active_rows),
         'items_ativos': sorted_items(active_rows),
         'items_desativados': sorted_items(disabled_rows),
     }
@@ -481,8 +549,35 @@ def render_html(data):
     .desc{{font-size:14px;line-height:1.22}}
     .block{{margin-bottom:7px}}
     .empty{{padding:24px;border-radius:16px;border:1px dashed var(--line);background:#fffaf0;color:var(--muted)}}
-    @media(max-width:1220px){{header,.layout{{grid-template-columns:1fr}}.kpis{{grid-template-columns:repeat(3,1fr)}}.schools{{grid-template-columns:repeat(2,1fr)}}.toolbar{{grid-template-columns:1fr 1fr}}.toolbar input{{grid-column:1/-1}}.panel{{position:relative;top:0}}.task{{grid-template-columns:1fr}}}}
-    @media print{{.toolbar,.tabs{{display:none}}body{{background:#fff}}.kpi,.school,.panel,.task{{box-shadow:none}}}}
+    .routines{{margin:0 0 16px}}
+    .routines-head{{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:0 0 10px}}
+    .routines-head h2{{font-size:24px;margin:0}}
+    .routines-grid{{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:10px}}
+    .routine{{text-align:left;background:rgba(255,250,240,.94);border:1px solid var(--line);border-left:7px solid var(--blue);border-radius:16px;padding:12px;box-shadow:0 8px 18px rgba(41,34,20,.07)}}
+    .routine.active{{outline:3px solid rgba(31,116,85,.25);background:#fffaf0}}
+    .routine[data-cx="E4 bloqueado"]{{border-left-color:var(--red)}}
+    .routine[data-cx="E3 alto"]{{border-left-color:var(--amber)}}
+    .routine[data-cx="E1 rápido"]{{border-left-color:var(--green)}}
+    .routine-top{{display:flex;justify-content:space-between;gap:8px;align-items:start}}
+    .routine-title{{font-size:17px;font-weight:950;line-height:1.05;margin-bottom:6px}}
+    .routine-count{{font-size:31px;font-weight:950;line-height:1;color:var(--green)}}
+    .routine ol{{margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.22;color:#39443c}}
+    .routine-schools{{margin-top:8px;font-size:12px;color:var(--muted);font-weight:800;line-height:1.2}}
+    .thumb-button{{display:block;width:100%;padding:0;border:0;background:transparent;border-radius:10px;cursor:zoom-in}}
+    .thumb-button:focus-visible{{outline:3px solid var(--green);outline-offset:3px}}
+    .image-modal{{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(16,22,18,.88)}}
+    .image-modal.open{{display:flex}}
+    .modal-card{{width:min(1180px,96vw);max-height:94vh;display:grid;grid-template-rows:auto 1fr;background:#fffaf0;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.35)}}
+    .modal-head{{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}}
+    .modal-title{{font-size:18px;font-weight:950;line-height:1.1}}
+    .modal-close{{width:42px;height:42px;border-radius:50%;font-size:24px;line-height:1;background:var(--ink);color:#fff;border:0}}
+    .modal-body{{display:grid;grid-template-columns:1fr 300px;gap:0;min-height:0}}
+    .modal-body img{{width:100%;height:100%;max-height:calc(94vh - 70px);object-fit:contain;background:#191f1b}}
+    .modal-info{{padding:14px;border-left:1px solid var(--line);overflow:auto}}
+    .modal-info .block{{font-size:14px;line-height:1.25}}
+    @media(max-width:1220px){{header,.layout{{grid-template-columns:1fr}}.kpis{{grid-template-columns:repeat(3,1fr)}}.schools{{grid-template-columns:repeat(2,1fr)}}.toolbar{{grid-template-columns:1fr 1fr}}.toolbar input{{grid-column:1/-1}}.panel{{position:relative;top:0}}.task{{grid-template-columns:1fr}}.routines-grid{{grid-template-columns:1fr 1fr}}}}
+    @media(max-width:760px){{.routines-grid,.modal-body{{grid-template-columns:1fr}}.modal-info{{border-left:0;border-top:1px solid var(--line)}}.modal-card{{max-height:96vh}}}}
+    @media print{{.toolbar,.tabs,.routines,.image-modal{{display:none}}body{{background:#fff}}.kpi,.school,.panel,.task{{box-shadow:none}}}}
   </style>
 </head>
 <body>
@@ -515,6 +610,14 @@ def render_html(data):
 
   <section class="schools" id="schools"></section>
 
+  <section class="routines">
+    <div class="routines-head">
+      <h2>Rotinas de Correção no Revit</h2>
+      <button id="clearRoutine">Limpar rotina</button>
+    </div>
+    <div id="routines" class="routines-grid"></div>
+  </section>
+
   <section class="layout">
     <aside class="panel">
       <h4>Distribuição</h4>
@@ -530,15 +633,50 @@ def render_html(data):
     </section>
   </section>
 </main>
+<div id="imageModal" class="image-modal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <div>
+        <div id="modalTitle" class="modal-title"></div>
+        <div id="modalMeta" class="meta"></div>
+      </div>
+      <button id="modalClose" class="modal-close" aria-label="Fechar imagem">×</button>
+    </div>
+    <div class="modal-body">
+      <img id="modalImage" alt="Recorte ampliado do laudo" />
+      <div id="modalInfo" class="modal-info"></div>
+    </div>
+  </div>
+</div>
 <script id="payload" type="application/json">{payload}</script>
 <script>
 const data = JSON.parse(document.getElementById('payload').textContent);
-let state = {{tab:'ativos', school:'all', owner:'all', package:'all', complexity:'all', q:'', quick:false}};
+let state = {{tab:'ativos', school:'all', owner:'all', package:'all', complexity:'all', q:'', quick:false, routine:null}};
+let renderedItems = [];
 const $ = (id)=>document.getElementById(id);
 const entries = (o)=>Object.entries(o||{{}}).sort((a,b)=>b[1]-a[1]);
 
+function escapeHtml(value){{
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({{
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }}[ch]));
+}}
+
+function safeImagePath(value){{
+  const path = String(value || '');
+  return path.startsWith('assets/previews/') ? path : 'assets/previews/sem_imagem.svg';
+}}
+
+function routineKey(routine){{
+  return routine.tipo + '||' + routine.pacote;
+}}
+
 function optionFill(id, label, vals){{
-  $(id).innerHTML = `<option value="all">${{label}}</option>` + vals.map(v=>`<option value="${{v}}">${{v}}</option>`).join('');
+  $(id).innerHTML = `<option value="all">${{escapeHtml(label)}}</option>` + vals.map(v=>`<option value="${{escapeHtml(v)}}">${{escapeHtml(v)}}</option>`).join('');
 }}
 
 function renderKpis(){{
@@ -551,17 +689,17 @@ function renderKpis(){{
     ['P1 arquitetura', s.p1_arquitetura],
     ['E3 arquitetura', s.e3_arquitetura],
     ['Cobertura imagem %', s.image_coverage_arquitetura + '%']
-  ].map(x=>`<article class="kpi"><span>${{x[0]}}</span><b>${{x[1]}}</b></article>`).join('');
+  ].map(x=>`<article class="kpi"><span>${{escapeHtml(x[0])}}</span><b>${{escapeHtml(x[1])}}</b></article>`).join('');
 }}
 
 function renderSchools(){{
-  $('schools').innerHTML = data.schools.map(s=>`<article class="school"><h3>${{s.nome}}</h3><div class="meta">abertas arquitetura</div><div class="big">${{s.abertas_arquitetura}}</div><div class="chips"><span class="chip">P1 ${{s.p1_arquitetura}}</span><span class="chip">E1 ${{s.e1_arquitetura}}</span><span class="chip">E3 ${{s.e3_arquitetura}}</span><span class="chip">E4 ${{s.e4_arquitetura}}</span><span class="chip">Desativadas ${{s.abertas_desativadas}}</span></div></article>`).join('');
+  $('schools').innerHTML = data.schools.map(s=>`<article class="school"><h3>${{escapeHtml(s.nome)}}</h3><div class="meta">abertas arquitetura</div><div class="big">${{escapeHtml(s.abertas_arquitetura)}}</div><div class="chips"><span class="chip">P1 ${{escapeHtml(s.p1_arquitetura)}}</span><span class="chip">E1 ${{escapeHtml(s.e1_arquitetura)}}</span><span class="chip">E3 ${{escapeHtml(s.e3_arquitetura)}}</span><span class="chip">E4 ${{escapeHtml(s.e4_arquitetura)}}</span><span class="chip">Desativadas ${{escapeHtml(s.abertas_desativadas)}}</span></div></article>`).join('');
 }}
 
 function bars(id, obj){{
   const e = entries(obj);
   const max = Math.max(1, ...e.map(x=>x[1]));
-  $(id).innerHTML = e.map(([k,v])=>`<div class="bar"><span>${{k}}</span><div class="track"><div class="fill" style="width:${{Math.round(v/max*100)}}%"></div></div><span>${{v}}</span></div>`).join('');
+  $(id).innerHTML = e.map(([k,v])=>`<div class="bar"><span>${{escapeHtml(k)}}</span><div class="track"><div class="fill" style="width:${{Math.round(v/max*100)}}%"></div></div><span>${{escapeHtml(v)}}</span></div>`).join('');
 }}
 
 function currentItems(){{
@@ -576,11 +714,40 @@ function filteredItems(){{
     .filter(r=>state.package==='all' || r.pacote_entrega===state.package)
     .filter(r=>state.complexity==='all' || r.complexidade===state.complexity)
     .filter(r=>!state.quick || r.complexidade==='E1 rápido')
+    .filter(r=>!state.routine || (r.acao_sugerida === state.routine.tipo && r.pacote_entrega === state.routine.pacote))
     .filter(r=>!q || JSON.stringify(r).toLowerCase().includes(q));
+}}
+
+function renderRoutines(){{
+  if (state.tab !== 'ativos') {{
+    $('routines').innerHTML = '<div class="empty">Rotinas Revit aparecem apenas para itens ativos de arquitetura.</div>';
+    $('clearRoutine').style.display = 'none';
+    return;
+  }}
+  $('clearRoutine').style.display = state.routine ? 'inline-block' : 'none';
+  $('routines').innerHTML = (data.rotinas_correcao || []).map(routine => {{
+    const active = state.routine && routine.tipo === state.routine.tipo && routine.pacote === state.routine.pacote;
+    const steps = (routine.checklist_revit || []).slice(0, 6).map(step=>`<li>${{escapeHtml(step)}}</li>`).join('');
+    const schools = (routine.escolas || []).slice(0, 4).join(' • ');
+    return `
+      <button class="routine ${{active ? 'active' : ''}}" data-key="${{escapeHtml(routineKey(routine))}}" data-cx="${{escapeHtml(routine.complexidade_dominante)}}">
+        <div class="routine-top">
+          <div>
+            <div class="routine-title">${{escapeHtml(routine.tipo)}}</div>
+            <div class="meta">${{escapeHtml(routine.pacote)}} • ${{escapeHtml(routine.complexidade_dominante)}}</div>
+          </div>
+          <div class="routine-count">${{escapeHtml(routine.total)}}</div>
+        </div>
+        <ol>${{steps}}</ol>
+        <div class="routine-schools">${{escapeHtml(schools)}}${{routine.escolas.length > 4 ? ' +' + (routine.escolas.length - 4) : ''}}</div>
+      </button>
+    `;
+  }}).join('');
 }}
 
 function renderTasks(){{
   const items = filteredItems();
+  renderedItems = items.slice(0, 220);
   $('taskTitle').textContent = 'Itens (' + items.length + ') - ' + (state.tab === 'ativos' ? 'Arquitetura Ativos' : 'Desativados');
   if (!items.length) {{
     $('tasks').innerHTML = '<div class="empty">Nenhum item com os filtros atuais.</div>';
@@ -589,43 +756,67 @@ function renderTasks(){{
 
   let html = '';
   let prevOwner = '';
-  items.slice(0, 220).forEach(r => {{
+  renderedItems.forEach((r, idx) => {{
     if (r.dono_sugerido !== prevOwner) {{
       prevOwner = r.dono_sugerido;
-      html += `<div class="group">${{prevOwner}}</div>`;
+      html += `<div class="group">${{escapeHtml(prevOwner)}}</div>`;
     }}
     html += `
-      <article class="task" data-cx="${{r.complexidade}}">
+      <article class="task" data-cx="${{escapeHtml(r.complexidade)}}">
         <div>
-          <img src="${{r.imagem_preview_relpath}}" alt="preview item" />
-          <div class="meta">${{r.imagem_origem_pdf}}</div>
-          <div class="meta">pag. ${{r.imagem_origem_pagina || '-'}} • conf. ${{r.imagem_confianca}}</div>
+          <button class="thumb-button" data-image-index="${{idx}}" aria-label="Abrir recorte em tela cheia">
+            <img src="${{escapeHtml(safeImagePath(r.imagem_preview_relpath))}}" alt="preview item" loading="lazy" />
+          </button>
+          <div class="meta">${{escapeHtml(r.imagem_origem_pdf)}}</div>
+          <div class="meta">pag. ${{escapeHtml(r.imagem_origem_pagina || '-')}} • conf. ${{escapeHtml(r.imagem_confianca)}}</div>
         </div>
         <div>
-          <div class="title">${{r.escola_curta}}</div>
-          <div class="meta">item ${{r.item_detectado || '-'}} • ${{r.complexidade}} • ${{r.prioridade_sugerida}}</div>
-          <div class="meta">${{r.disciplina_detectada}} • ${{r.pacote_entrega}}</div>
-          <div class="meta">${{r.status_exibicao}}</div>
+          <div class="title">${{escapeHtml(r.escola_curta)}}</div>
+          <div class="meta">item ${{escapeHtml(r.item_detectado || '-')}} • ${{escapeHtml(r.complexidade)}} • ${{escapeHtml(r.prioridade_sugerida)}}</div>
+          <div class="meta">${{escapeHtml(r.disciplina_detectada)}} • ${{escapeHtml(r.pacote_entrega)}}</div>
+          <div class="meta">${{escapeHtml(r.status_exibicao)}}</div>
         </div>
         <div class="desc">
-          <div class="block"><b>Problema:</b> ${{r.problema_resumo}}</div>
-          <div class="block"><b>Ação:</b> ${{r.o_que_fazer}}</div>
-          <div class="block"><b>Como no Revit:</b> ${{r.como_no_revit}}</div>
-          <div class="block"><b>Evidência:</b> ${{r.evidencia_esperada}}</div>
+          <div class="block"><b>Problema:</b> ${{escapeHtml(r.problema_resumo)}}</div>
+          <div class="block"><b>Ação:</b> ${{escapeHtml(r.o_que_fazer)}}</div>
+          <div class="block"><b>Como no Revit:</b> ${{escapeHtml(r.como_no_revit)}}</div>
+          <div class="block"><b>Evidência:</b> ${{escapeHtml(r.evidencia_esperada)}}</div>
         </div>
         <div>
           <div class="meta">dono sugerido</div>
-          <div class="title">${{r.dono_sugerido}}</div>
+          <div class="title">${{escapeHtml(r.dono_sugerido)}}</div>
           <div class="meta">tipo</div>
-          <div class="title">${{r.tipo_trabalho}}</div>
+          <div class="title">${{escapeHtml(r.tipo_trabalho)}}</div>
           <div class="meta">ação sugerida</div>
-          <div class="title">${{r.acao_sugerida}}</div>
+          <div class="title">${{escapeHtml(r.acao_sugerida)}}</div>
         </div>
       </article>
     `;
   }});
 
   $('tasks').innerHTML = html;
+}}
+
+function openImageModal(row){{
+  $('modalTitle').textContent = (row.escola_curta || 'Escola') + ' • item ' + (row.item_detectado || '-');
+  $('modalMeta').textContent = (row.imagem_origem_pdf || '-') + ' • pag. ' + (row.imagem_origem_pagina || '-') + ' • conf. ' + (row.imagem_confianca || '-');
+  $('modalImage').src = safeImagePath(row.imagem_preview_relpath);
+  $('modalInfo').innerHTML = `
+    <div class="block"><b>Problema:</b> ${{escapeHtml(row.problema_resumo)}}</div>
+    <div class="block"><b>Ação:</b> ${{escapeHtml(row.o_que_fazer)}}</div>
+    <div class="block"><b>Como no Revit:</b> ${{escapeHtml(row.como_no_revit)}}</div>
+    <div class="block"><b>Evidência:</b> ${{escapeHtml(row.evidencia_esperada)}}</div>
+    <div class="block"><b>Pacote:</b> ${{escapeHtml(row.pacote_entrega)}} / ${{escapeHtml(row.complexidade)}}</div>
+  `;
+  $('imageModal').classList.add('open');
+  $('imageModal').setAttribute('aria-hidden', 'false');
+  $('modalClose').focus();
+}}
+
+function closeImageModal(){{
+  $('imageModal').classList.remove('open');
+  $('imageModal').setAttribute('aria-hidden', 'true');
+  $('modalImage').removeAttribute('src');
 }}
 
 function rebindFilters(){{
@@ -640,6 +831,7 @@ function rebindFilters(){{
   state.package = 'all';
   state.complexity = 'all';
   state.q = '';
+  state.routine = null;
   $('search').value = '';
   state.quick = false;
   $('quick').classList.remove('active');
@@ -662,6 +854,30 @@ function wire(){{
   $('package').onchange = e => {{ state.package = e.target.value; renderTasks(); }};
   $('complexity').onchange = e => {{ state.complexity = e.target.value; renderTasks(); }};
   $('quick').onclick = () => {{ state.quick = !state.quick; $('quick').classList.toggle('active', state.quick); renderTasks(); }};
+  $('clearRoutine').onclick = () => {{ state.routine = null; renderRoutines(); renderTasks(); }};
+
+  $('routines').onclick = e => {{
+    const btn = e.target.closest('.routine');
+    if (!btn) return;
+    const [tipo, pacote] = btn.dataset.key.split('||');
+    state.routine = {{tipo, pacote}};
+    renderRoutines();
+    renderTasks();
+    document.querySelector('.tasks').scrollIntoView({{behavior:'smooth', block:'start'}});
+  }};
+
+  $('tasks').onclick = e => {{
+    const btn = e.target.closest('.thumb-button');
+    if (!btn) return;
+    const row = renderedItems[Number(btn.dataset.imageIndex)];
+    if (row) openImageModal(row);
+  }};
+
+  $('modalClose').onclick = closeImageModal;
+  $('imageModal').onclick = e => {{ if (e.target.id === 'imageModal') closeImageModal(); }};
+  document.addEventListener('keydown', e => {{
+    if (e.key === 'Escape' && $('imageModal').classList.contains('open')) closeImageModal();
+  }});
 
   document.querySelectorAll('.tab').forEach(btn => {{
     btn.onclick = () => {{
@@ -670,6 +886,7 @@ function wire(){{
       state.tab = btn.dataset.tab;
       rebindFilters();
       renderBreakdowns();
+      renderRoutines();
       renderTasks();
     }};
   }});
@@ -679,6 +896,7 @@ renderKpis();
 renderSchools();
 rebindFilters();
 renderBreakdowns();
+renderRoutines();
 wire();
 renderTasks();
 </script>
