@@ -15,6 +15,7 @@ ANALYSES_DIR = BASE / 'Analises'
 SOURCE_CSV = BASE / '_trabalho' / 'entregaveis' / 'matriz_pendencias_extraidas.csv'
 PUBLIC_DIR = BASE / '_trabalho' / 'pages-public'
 PREVIEW_DIR = PUBLIC_DIR / 'assets' / 'previews'
+FULL_PREVIEW_DIR = PUBLIC_DIR / 'assets' / 'previews-full'
 WORK_PREVIEW_DIR = BASE / '_trabalho' / '_previews_work'
 CLASSIFIED_CSV = PUBLIC_DIR / 'classificacao_operacional.csv'
 DATA_JSON = PUBLIC_DIR / 'dashboard_data.json'
@@ -76,6 +77,19 @@ def normalize_spaces(value: str) -> str:
     return re.sub(r'\s+', ' ', (value or '').strip())
 
 
+def clean_laudo_text(value: str) -> str:
+    text = normalize_spaces(value)
+    text = re.sub(r'\bPROJ\.\s*', '', text, flags=re.I)
+    text = re.sub(r'\b(DESENHO|TABELA|MODELO 3D EM|ORGANIZAÇÃO)\b', '', text, flags=re.I)
+    text = re.sub(r'\b(BÁSICO|BASICO|EXECUTIVO|N/A)\b', '', text, flags=re.I)
+    text = re.sub(r'\bNÃO\b', '', text, flags=re.I)
+    text = re.sub(r'Página\s+\d+\s+de\s+\d+', '', text, flags=re.I)
+    text = re.sub(r'\bSEDUC[A-Z0-9]+\b', '', text, flags=re.I)
+    text = re.sub(r'\s+([.,;:])', r'\1', text)
+    text = normalize_spaces(text)
+    return text or normalize_spaces(value)
+
+
 def norm_status(value: str) -> str:
     return 'NAO' if value == 'NÃO' else (value or '').strip()
 
@@ -131,6 +145,7 @@ def build_image_index():
     pdf_page_count = {}
     WORK_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    FULL_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
     for pdf in sorted(ANALYSES_DIR.glob('*.pdf')):
         laudo = pdf.stem
@@ -164,9 +179,13 @@ def build_image_index():
 
         for page in candidate_pages:
             out_base = WORK_PREVIEW_DIR / f"{laudo}__p{page:03d}"
+            full_out_base = WORK_PREVIEW_DIR / f"{laudo}__p{page:03d}__full"
             thumb_name = f"{laudo}__p{page:03d}.jpg"
+            full_name = f"{laudo}__p{page:03d}__full.jpg"
             thumb_rel = f"assets/previews/{thumb_name}"
+            full_rel = f"assets/previews-full/{full_name}"
             thumb_path = PREVIEW_DIR / thumb_name
+            full_path = FULL_PREVIEW_DIR / full_name
             if not thumb_path.exists():
                 cmd = [
                     'pdftoppm',
@@ -183,10 +202,28 @@ def build_image_index():
                 if jpg_tmp.exists():
                     shutil.move(str(jpg_tmp), str(thumb_path))
 
+            if not full_path.exists():
+                cmd = [
+                    'pdftoppm',
+                    '-f', str(page),
+                    '-singlefile',
+                    '-scale-to-x', '2200',
+                    '-scale-to-y', '-1',
+                    '-jpeg',
+                    '-jpegopt', 'quality=92,progressive=y,optimize=y',
+                    str(pdf),
+                    str(full_out_base),
+                ]
+                subprocess.run(cmd, capture_output=True, text=True, check=False)
+                jpg_tmp = full_out_base.with_suffix('.jpg')
+                if jpg_tmp.exists():
+                    shutil.move(str(jpg_tmp), str(full_path))
+
             if thumb_path.exists():
                 image_index[ckey].append({
                     'page': page,
                     'relpath': thumb_rel,
+                    'full_relpath': full_rel if full_path.exists() else thumb_rel,
                     'confidence': 'alta' if page_has_image.get(page, False) else 'baixa',
                     'origin_pdf': laudo,
                 })
@@ -205,6 +242,10 @@ def build_image_index():
             encoding='utf-8',
         )
 
+    full_placeholder = FULL_PREVIEW_DIR / 'sem_imagem.svg'
+    if not full_placeholder.exists():
+        shutil.copyfile(placeholder, full_placeholder)
+
     return image_index, pdf_page_count
 
 
@@ -212,7 +253,7 @@ def choose_image(laudo: str, line_text: str, image_index, page_count: int):
     ckey = canonical_key(laudo)
     pages = image_index.get(ckey, [])
     if not pages:
-        return 'assets/previews/sem_imagem.svg', laudo, 0, 'sem_imagem'
+        return 'assets/previews/sem_imagem.svg', 'assets/previews-full/sem_imagem.svg', laudo, 0, 'sem_imagem'
 
     target = estimate_page(line_text, page_count)
     best = min(pages, key=lambda x: abs(x['page'] - target))
@@ -224,7 +265,7 @@ def choose_image(laudo: str, line_text: str, image_index, page_count: int):
         conf = 'media'
     else:
         conf = 'baixa'
-    return best['relpath'], best.get('origin_pdf', laudo), best['page'], conf
+    return best['relpath'], best.get('full_relpath', best['relpath']), best.get('origin_pdf', laudo), best['page'], conf
 
 
 def build_action_text(action: str, discipline: str, text: str):
@@ -255,6 +296,72 @@ def build_revit_steps(discipline: str, action: str):
     if discipline == 'topografia':
         return 'No Revit 2025: validar topografia/implantação, coordenadas e delimitação do terreno, atualizar vista de implantação e reexportar.'
     return 'No Revit 2025: validar item na vista correspondente, corrigir modelo/prancha e reemitir PDF de revisão.'
+
+
+def explain_for_programmer(action: str, package: str, clean_problem: str, raw_text: str) -> str:
+    mixed_ok = 'em conformidade' in raw_text.lower() and ('não' in raw_text.lower() or 'nao' in raw_text.lower())
+    prefix = ''
+    if mixed_ok:
+        prefix = 'O laudo mistura trechos em conformidade com um status pendente. Isso normalmente significa que um subitem específico ainda precisa ser conferido antes de alterar o projeto. '
+
+    if action == 'corrigir prancha':
+        return prefix + 'A pendência parece estar no desenho publicado: folha, carimbo, legenda, cotas, nomes, níveis ou representação gráfica. Para você como programador, pense nisso como corrigir a tela/relatório final que será entregue, não necessariamente o banco de dados inteiro do modelo.'
+    if action == 'apresentar documento':
+        return prefix + 'A pendência indica ausência ou inconsistência de documento. Pode ser prancha, memorial, ART/RRT, assinatura, índice, IFC ou arquivo complementar. A ação é localizar o arquivo faltante ou gerar uma revisão correta para anexar ao pacote.'
+    if action == 'compatibilizar modelo':
+        return prefix + 'A pendência indica conflito entre informações. Exemplo: uma planta diz uma coisa, o corte ou a implantação mostra outra. A tarefa é fazer as informações baterem entre modelo, vistas e pranchas.'
+    if action == 'revisar norma':
+        return prefix + 'A pendência pede conferência contra uma regra técnica. A arquiteta precisa verificar se o desenho atende norma, medida mínima, acessibilidade ou requisito formal antes de emitir.'
+    if action == 'pedir decisão':
+        return prefix + 'A pendência depende de decisão externa. Antes de mexer no Revit, é preciso documentar a dúvida, mostrar a evidência e pedir validação da coordenação/gestão.'
+    if action == 'revisar orçamento':
+        return prefix + 'A pendência afeta quantitativo ou planilha. A correção no desenho/modelo precisa refletir nos números do orçamento ou no pacote executivo.'
+    return prefix + 'O texto extraído não deixa uma ação única confiável. A primeira tarefa é abrir o laudo/PDF, entender o subitem e classificar a correção antes de executar no Revit.'
+
+
+def architecture_context(package: str, clean_problem: str) -> str:
+    context_by_package = {
+        'cobertura/quadra': 'Esse pacote envolve quadra, cobertura, vestiários e elementos associados. Erros aqui afetam leitura de implantação, execução de cobertura, drenagem, acessos e documentação da área esportiva.',
+        'acessibilidade': 'Esse pacote envolve atendimento à NBR 9050: rampas, corrimãos, guarda-corpo, piso tátil, circulação e cotas. Pequenos erros podem impedir aprovação técnica.',
+        'implantação/topografia': 'Esse pacote mostra como a escola se posiciona no terreno: limites, níveis, taludes, acessos e relação com o entorno. É uma das bases para compatibilizar todo o projeto.',
+        'documentos assinados': 'Esse pacote garante rastreabilidade legal e técnica: responsável, assinatura, revisão, memorial, prancha ou documento complementar. Sem isso, a entrega pode ser recusada mesmo com desenho correto.',
+        'licenças/TRP': 'Esse pacote envolve documentos formais de recebimento, licença ou regularização. Normalmente não se resolve só desenhando; exige conferir documentação e aprovação.',
+        'orçamento/executivo': 'Esse pacote conecta projeto e execução. O que está desenhado precisa bater com quantitativos, planilhas e documentos do executivo.',
+        'triagem operacional': 'Esse pacote precisa de leitura humana do laudo porque o OCR ou o texto original não deixou uma categoria forte o bastante.',
+    }
+    return context_by_package.get(package, 'Esse item precisa ser conferido no pacote técnico correto antes da próxima emissão.')
+
+
+def where_to_check_in_revit(package: str, action: str) -> str:
+    if package == 'acessibilidade':
+        return 'Vistas de planta de acessibilidade, detalhes de rampa/corrimão, cortes e folhas onde aparecem piso tátil, rampas e circulações.'
+    if package == 'implantação/topografia':
+        return 'Vista de implantação/site plan, níveis do terreno, limites, acessos, cotas gerais e folha de implantação.'
+    if package == 'cobertura/quadra':
+        return 'Plantas e cortes da quadra/cobertura/vestiários, folhas de cobertura e detalhes associados.'
+    if package == 'documentos assinados':
+        return 'Folhas emitidas, lista/índice de pranchas, carimbo, parâmetros de revisão e arquivos/documentos anexos ao pacote.'
+    if package == 'licenças/TRP':
+        return 'Índice de entrega, folhas/documentos formais e controle externo de documentação; pode não estar dentro do RVT.'
+    if package == 'orçamento/executivo':
+        return 'Vistas usadas para quantitativo, tabelas/schedules, folhas executivas e elementos que geram contagem/área/comprimento.'
+    return 'Vista ou folha citada no laudo; se não houver referência clara, começar pelo índice de pranchas e buscar o item/seção.'
+
+
+def acceptance_criteria(action: str, package: str) -> str:
+    if action == 'apresentar documento':
+        return 'Documento faltante anexado ou folha revisada emitida, com identificação da escola, revisão, data e responsável técnico quando aplicável.'
+    if action == 'corrigir prancha':
+        return 'PDF revisado mostra a informação corrigida na folha, sem conflito visual, texto ilegível ou indicação incompleta.'
+    if action == 'compatibilizar modelo':
+        return 'A mesma informação confere em planta, corte/elevação, implantação e folha final.'
+    if action == 'revisar norma':
+        return 'Medida, elemento ou indicação atende a norma aplicável e a evidência está visível na prancha ou memorial.'
+    if action == 'pedir decisão':
+        return 'Decisão registrada por coordenação/gestão e pendência desbloqueada antes da revisão final.'
+    if action == 'revisar orçamento':
+        return 'Quantitativo/planilha atualizado e coerente com o desenho ou modelo revisado.'
+    return 'Item conferido contra o laudo, ação classificada e evidência anexada no controle.'
 
 
 def classify_row(row, image_index, page_count):
@@ -309,12 +416,14 @@ def classify_row(row, image_index, page_count):
     is_arq = discipline == 'arquitetura'
     status_exibicao = 'ativo_arquitetura' if is_arq else 'desativado_nao_arquitetura'
 
-    preview_rel, origem_pdf, origem_page, img_conf = choose_image(
+    preview_rel, modal_rel, origem_pdf, origem_page, img_conf = choose_image(
         r.get('laudo', ''),
         r.get('linha_texto', ''),
         image_index,
         page_count.get(canonical_key(r.get('laudo', '')), 1),
     )
+    clean_problem = clean_laudo_text(r['observacao_extraida'])
+    checklist = routine_checklist(action, package)
 
     r.update({
         'disciplina_detectada': discipline,
@@ -331,10 +440,16 @@ def classify_row(row, image_index, page_count):
         'como_no_revit': build_revit_steps(discipline, action),
         'evidencia_esperada': 'Prancha/PDF revisado com item rastreável e observação de fechamento.',
         'imagem_preview_relpath': preview_rel,
+        'imagem_modal_relpath': modal_rel,
         'imagem_origem_pdf': origem_pdf,
         'imagem_origem_pagina': str(origem_page),
         'imagem_confianca': img_conf,
-        'problema_resumo': r['observacao_extraida'][:260],
+        'problema_resumo': clean_problem[:280],
+        'explicacao_programador': explain_for_programmer(action, package, clean_problem, r['observacao_extraida']),
+        'contexto_arquitetura': architecture_context(package, clean_problem),
+        'onde_ver_no_revit': where_to_check_in_revit(package, action),
+        'passo_a_passo_revit': checklist,
+        'criterio_aceite': acceptance_criteria(action, package),
     })
 
     return r
@@ -567,16 +682,18 @@ def render_html(data):
     .thumb-button:focus-visible{{outline:3px solid var(--green);outline-offset:3px}}
     .image-modal{{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(16,22,18,.88)}}
     .image-modal.open{{display:flex}}
-    .modal-card{{width:min(1180px,96vw);max-height:94vh;display:grid;grid-template-rows:auto 1fr;background:#fffaf0;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.35)}}
+    .modal-card{{width:min(1500px,98vw);max-height:96vh;display:grid;grid-template-rows:auto 1fr;background:#fffaf0;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.35)}}
     .modal-head{{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}}
     .modal-title{{font-size:18px;font-weight:950;line-height:1.1}}
     .modal-close{{width:42px;height:42px;border-radius:50%;font-size:24px;line-height:1;background:var(--ink);color:#fff;border:0}}
-    .modal-body{{display:grid;grid-template-columns:1fr 300px;gap:0;min-height:0}}
-    .modal-body img{{width:100%;height:100%;max-height:calc(94vh - 70px);object-fit:contain;background:#191f1b}}
+    .modal-body{{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:0;min-height:0}}
+    .modal-image-wrap{{overflow:auto;background:#191f1b;display:flex;align-items:flex-start;justify-content:center}}
+    .modal-body img{{width:100%;min-width:1120px;height:auto;background:#191f1b}}
     .modal-info{{padding:14px;border-left:1px solid var(--line);overflow:auto}}
     .modal-info .block{{font-size:14px;line-height:1.25}}
+    .modal-info ol{{margin:6px 0 12px;padding-left:18px;font-size:14px;line-height:1.28}}
     @media(max-width:1220px){{header,.layout{{grid-template-columns:1fr}}.kpis{{grid-template-columns:repeat(3,1fr)}}.schools{{grid-template-columns:repeat(2,1fr)}}.toolbar{{grid-template-columns:1fr 1fr}}.toolbar input{{grid-column:1/-1}}.panel{{position:relative;top:0}}.task{{grid-template-columns:1fr}}.routines-grid{{grid-template-columns:1fr 1fr}}}}
-    @media(max-width:760px){{.routines-grid,.modal-body{{grid-template-columns:1fr}}.modal-info{{border-left:0;border-top:1px solid var(--line)}}.modal-card{{max-height:96vh}}}}
+    @media(max-width:760px){{.routines-grid,.modal-body{{grid-template-columns:1fr}}.modal-info{{border-left:0;border-top:1px solid var(--line)}}.modal-card{{max-height:96vh}}.modal-body img{{min-width:980px}}}}
     @media print{{.toolbar,.tabs,.routines,.image-modal{{display:none}}body{{background:#fff}}.kpi,.school,.panel,.task{{box-shadow:none}}}}
   </style>
 </head>
@@ -643,7 +760,9 @@ def render_html(data):
       <button id="modalClose" class="modal-close" aria-label="Fechar imagem">×</button>
     </div>
     <div class="modal-body">
-      <img id="modalImage" alt="Recorte ampliado do laudo" />
+      <div class="modal-image-wrap">
+        <img id="modalImage" alt="Recorte ampliado do laudo" />
+      </div>
       <div id="modalInfo" class="modal-info"></div>
     </div>
   </div>
@@ -668,7 +787,7 @@ function escapeHtml(value){{
 
 function safeImagePath(value){{
   const path = String(value || '');
-  return path.startsWith('assets/previews/') ? path : 'assets/previews/sem_imagem.svg';
+  return (path.startsWith('assets/previews/') || path.startsWith('assets/previews-full/')) ? path : 'assets/previews/sem_imagem.svg';
 }}
 
 function routineKey(routine){{
@@ -778,9 +897,9 @@ function renderTasks(){{
         </div>
         <div class="desc">
           <div class="block"><b>Problema:</b> ${{escapeHtml(r.problema_resumo)}}</div>
+          <div class="block"><b>Explicação:</b> ${{escapeHtml(r.explicacao_programador)}}</div>
           <div class="block"><b>Ação:</b> ${{escapeHtml(r.o_que_fazer)}}</div>
           <div class="block"><b>Como no Revit:</b> ${{escapeHtml(r.como_no_revit)}}</div>
-          <div class="block"><b>Evidência:</b> ${{escapeHtml(r.evidencia_esperada)}}</div>
         </div>
         <div>
           <div class="meta">dono sugerido</div>
@@ -789,6 +908,8 @@ function renderTasks(){{
           <div class="title">${{escapeHtml(r.tipo_trabalho)}}</div>
           <div class="meta">ação sugerida</div>
           <div class="title">${{escapeHtml(r.acao_sugerida)}}</div>
+          <div class="meta">modal</div>
+          <div class="title">Clique na imagem para ver explicação completa</div>
         </div>
       </article>
     `;
@@ -800,12 +921,16 @@ function renderTasks(){{
 function openImageModal(row){{
   $('modalTitle').textContent = (row.escola_curta || 'Escola') + ' • item ' + (row.item_detectado || '-');
   $('modalMeta').textContent = (row.imagem_origem_pdf || '-') + ' • pag. ' + (row.imagem_origem_pagina || '-') + ' • conf. ' + (row.imagem_confianca || '-');
-  $('modalImage').src = safeImagePath(row.imagem_preview_relpath);
+  $('modalImage').src = safeImagePath(row.imagem_modal_relpath || row.imagem_preview_relpath);
+  const steps = Array.isArray(row.passo_a_passo_revit) ? row.passo_a_passo_revit : [];
   $('modalInfo').innerHTML = `
-    <div class="block"><b>Problema:</b> ${{escapeHtml(row.problema_resumo)}}</div>
-    <div class="block"><b>Ação:</b> ${{escapeHtml(row.o_que_fazer)}}</div>
-    <div class="block"><b>Como no Revit:</b> ${{escapeHtml(row.como_no_revit)}}</div>
-    <div class="block"><b>Evidência:</b> ${{escapeHtml(row.evidencia_esperada)}}</div>
+    <div class="block"><b>Problema no laudo:</b> ${{escapeHtml(row.problema_resumo)}}</div>
+    <div class="block"><b>Explicação para programador:</b> ${{escapeHtml(row.explicacao_programador)}}</div>
+    <div class="block"><b>Contexto:</b> ${{escapeHtml(row.contexto_arquitetura)}}</div>
+    <div class="block"><b>Onde conferir no Revit:</b> ${{escapeHtml(row.onde_ver_no_revit)}}</div>
+    <div class="block"><b>Como conferir no Revit:</b></div>
+    <ol>${{steps.map(step => `<li>${{escapeHtml(step)}}</li>`).join('')}}</ol>
+    <div class="block"><b>Critério de aceite:</b> ${{escapeHtml(row.criterio_aceite)}}</div>
     <div class="block"><b>Pacote:</b> ${{escapeHtml(row.pacote_entrega)}} / ${{escapeHtml(row.complexidade)}}</div>
   `;
   $('imageModal').classList.add('open');
@@ -907,6 +1032,7 @@ renderTasks();
 def main():
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    FULL_PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
     image_index, page_count = build_image_index()
 
