@@ -369,6 +369,10 @@ def classify_row(row, image_index, page_count):
     r['status_original_norm'] = norm_status(r.get('status_original'))
     r['escola_curta'] = short_school(r.get('laudo', ''))
     r['observacao_extraida'] = normalize_spaces(r.get('observacao_extraida'))[:900]
+    r['extracao_confianca'] = (r.get('extracao_confianca') or 'media').strip().lower()
+    r['motivo_confianca'] = normalize_spaces(r.get('motivo_confianca') or 'extração anterior sem motivo registrado')
+    r['possivel_duplicado'] = (r.get('possivel_duplicado') or 'false').strip().lower()
+    r['grupo_deduplicacao'] = r.get('grupo_deduplicacao') or ''
     status_correcao = (r.get('status_correcao', '') or '').strip().lower()
     r['is_open'] = r['status_original_norm'] == 'NAO' and status_correcao in OPEN_STATUSES
 
@@ -377,6 +381,7 @@ def classify_row(row, image_index, page_count):
         r.get('categoria_sugerida', ''),
         r.get('observacao_extraida', ''),
         r.get('item_detectado', ''),
+        r.get('item_rotulo_detectado', ''),
     ]).lower()
 
     discipline = match_first(text, DISCIPLINE_RULES, 'outros')
@@ -461,15 +466,19 @@ def counter_dict(rows, key):
 
 def build_school_summary(laudo, group):
     open_group = [r for r in group if r['is_open']]
-    active_group = [r for r in open_group if r['is_arquitetura'] == 'true']
-    disabled_group = [r for r in open_group if r['is_arquitetura'] != 'true']
+    audit_group = [r for r in open_group if r['extracao_confianca'] == 'baixa' or r['possivel_duplicado'] == 'true']
+    reliable_group = [r for r in open_group if r not in audit_group]
+    active_group = [r for r in reliable_group if r['is_arquitetura'] == 'true']
+    disabled_group = [r for r in reliable_group if r['is_arquitetura'] != 'true']
     return {
         'laudo': laudo,
         'nome': short_school(laudo),
         'total': len(group),
         'abertas_total': len(open_group),
+        'abertas_confiaveis': len(reliable_group),
         'abertas_arquitetura': len(active_group),
         'abertas_desativadas': len(disabled_group),
+        'abertas_auditoria': len(audit_group),
         'p1_arquitetura': sum(1 for r in active_group if r['prioridade_sugerida'] == 'P1'),
         'e1_arquitetura': sum(1 for r in active_group if r['complexidade'] == 'E1 rápido'),
         'e3_arquitetura': sum(1 for r in active_group if r['complexidade'] == 'E3 alto'),
@@ -554,8 +563,10 @@ def write_csv(path, rows, fieldnames):
 
 def build_data(rows):
     open_rows = [r for r in rows if r['is_open']]
-    active_rows = [r for r in open_rows if r['is_arquitetura'] == 'true']
-    disabled_rows = [r for r in open_rows if r['is_arquitetura'] != 'true']
+    audit_rows = [r for r in open_rows if r['extracao_confianca'] == 'baixa' or r['possivel_duplicado'] == 'true']
+    reliable_rows = [r for r in open_rows if r not in audit_rows]
+    active_rows = [r for r in reliable_rows if r['is_arquitetura'] == 'true']
+    disabled_rows = [r for r in reliable_rows if r['is_arquitetura'] != 'true']
 
     by_school = defaultdict(list)
     for r in rows:
@@ -571,7 +582,7 @@ def build_data(rows):
                 PRIO_ORDER.get(r['prioridade_sugerida'], 9),
                 r['dono_sugerido'],
                 r['laudo'],
-                r.get('item_detectado', ''),
+                r.get('item_detectado') or r.get('item_rotulo_detectado', ''),
             )
         )
 
@@ -580,8 +591,12 @@ def build_data(rows):
         'summary': {
             'total': len(rows),
             'open_total': len(open_rows),
+            'open_confiaveis': len(reliable_rows),
             'open_arquitetura': len(active_rows),
             'open_desativados': len(disabled_rows),
+            'open_auditoria': len(audit_rows),
+            'open_baixa_confianca': sum(1 for r in open_rows if r['extracao_confianca'] == 'baixa'),
+            'open_duplicados': sum(1 for r in open_rows if r['possivel_duplicado'] == 'true'),
             'schools': len(schools),
             'p1_arquitetura': sum(1 for r in active_rows if r['prioridade_sugerida'] == 'P1'),
             'e1_arquitetura': sum(1 for r in active_rows if r['complexidade'] == 'E1 rápido'),
@@ -598,10 +613,12 @@ def build_data(rows):
             'complexidade_ativos': counter_dict(active_rows, 'complexidade'),
             'pacotes_ativos': counter_dict(active_rows, 'pacote_entrega'),
             'acoes_ativos': counter_dict(active_rows, 'acao_sugerida'),
+            'confianca_auditoria': counter_dict(audit_rows, 'extracao_confianca'),
         },
         'rotinas_correcao': build_revit_routines(active_rows),
         'items_ativos': sorted_items(active_rows),
         'items_desativados': sorted_items(disabled_rows),
+        'items_auditoria': sorted_items(audit_rows),
     }
 
 
@@ -723,6 +740,7 @@ def render_html(data):
   <section class="tabs">
     <button class="tab active" data-tab="ativos">Arquitetura Ativos</button>
     <button class="tab" data-tab="desativados">Desativados (Nao Arquitetura)</button>
+    <button class="tab" data-tab="auditoria">Auditoria da Extração</button>
   </section>
 
   <section class="schools" id="schools"></section>
@@ -803,16 +821,17 @@ function renderKpis(){{
   $('kpis').innerHTML = [
     ['Escolas', s.schools],
     ['Abertas total', s.open_total],
-    ['Ativas arquitetura', s.open_arquitetura],
-    ['Desativadas', s.open_desativados],
+    ['Confiáveis', s.open_confiaveis],
+    ['Arquitetura', s.open_arquitetura],
+    ['Auditoria', s.open_auditoria],
+    ['Duplicados', s.open_duplicados],
     ['P1 arquitetura', s.p1_arquitetura],
-    ['E3 arquitetura', s.e3_arquitetura],
     ['Cobertura imagem %', s.image_coverage_arquitetura + '%']
   ].map(x=>`<article class="kpi"><span>${{escapeHtml(x[0])}}</span><b>${{escapeHtml(x[1])}}</b></article>`).join('');
 }}
 
 function renderSchools(){{
-  $('schools').innerHTML = data.schools.map(s=>`<article class="school"><h3>${{escapeHtml(s.nome)}}</h3><div class="meta">abertas arquitetura</div><div class="big">${{escapeHtml(s.abertas_arquitetura)}}</div><div class="chips"><span class="chip">P1 ${{escapeHtml(s.p1_arquitetura)}}</span><span class="chip">E1 ${{escapeHtml(s.e1_arquitetura)}}</span><span class="chip">E3 ${{escapeHtml(s.e3_arquitetura)}}</span><span class="chip">E4 ${{escapeHtml(s.e4_arquitetura)}}</span><span class="chip">Desativadas ${{escapeHtml(s.abertas_desativadas)}}</span></div></article>`).join('');
+  $('schools').innerHTML = data.schools.map(s=>`<article class="school"><h3>${{escapeHtml(s.nome)}}</h3><div class="meta">abertas arquitetura confiáveis</div><div class="big">${{escapeHtml(s.abertas_arquitetura)}}</div><div class="chips"><span class="chip">P1 ${{escapeHtml(s.p1_arquitetura)}}</span><span class="chip">E1 ${{escapeHtml(s.e1_arquitetura)}}</span><span class="chip">E3 ${{escapeHtml(s.e3_arquitetura)}}</span><span class="chip">E4 ${{escapeHtml(s.e4_arquitetura)}}</span><span class="chip">Auditoria ${{escapeHtml(s.abertas_auditoria)}}</span></div></article>`).join('');
 }}
 
 function bars(id, obj){{
@@ -822,7 +841,9 @@ function bars(id, obj){{
 }}
 
 function currentItems(){{
-  return state.tab === 'ativos' ? data.items_ativos : data.items_desativados;
+  if (state.tab === 'ativos') return data.items_ativos;
+  if (state.tab === 'auditoria') return data.items_auditoria || [];
+  return data.items_desativados;
 }}
 
 function filteredItems(){{
@@ -839,7 +860,7 @@ function filteredItems(){{
 
 function renderRoutines(){{
   if (state.tab !== 'ativos') {{
-    $('routines').innerHTML = '<div class="empty">Rotinas Revit aparecem apenas para itens ativos de arquitetura.</div>';
+    $('routines').innerHTML = '<div class="empty">Rotinas Revit aparecem apenas para itens ativos de arquitetura confiáveis.</div>';
     $('clearRoutine').style.display = 'none';
     return;
   }}
@@ -867,7 +888,8 @@ function renderRoutines(){{
 function renderTasks(){{
   const items = filteredItems();
   renderedItems = items.slice(0, 220);
-  $('taskTitle').textContent = 'Itens (' + items.length + ') - ' + (state.tab === 'ativos' ? 'Arquitetura Ativos' : 'Desativados');
+  const tabLabel = state.tab === 'ativos' ? 'Arquitetura Ativos' : (state.tab === 'auditoria' ? 'Auditoria da Extração' : 'Desativados');
+  $('taskTitle').textContent = 'Itens (' + items.length + ') - ' + tabLabel;
   if (!items.length) {{
     $('tasks').innerHTML = '<div class="empty">Nenhum item com os filtros atuais.</div>';
     return;
@@ -880,6 +902,7 @@ function renderTasks(){{
       prevOwner = r.dono_sugerido;
       html += `<div class="group">${{escapeHtml(prevOwner)}}</div>`;
     }}
+    const itemLabel = r.item_detectado || r.item_rotulo_detectado || '-';
     html += `
       <article class="task" data-cx="${{escapeHtml(r.complexidade)}}">
         <div>
@@ -891,13 +914,15 @@ function renderTasks(){{
         </div>
         <div>
           <div class="title">${{escapeHtml(r.escola_curta)}}</div>
-          <div class="meta">item ${{escapeHtml(r.item_detectado || '-')}} • ${{escapeHtml(r.complexidade)}} • ${{escapeHtml(r.prioridade_sugerida)}}</div>
+          <div class="meta">item ${{escapeHtml(itemLabel)}} • ${{escapeHtml(r.complexidade)}} • ${{escapeHtml(r.prioridade_sugerida)}}</div>
           <div class="meta">${{escapeHtml(r.disciplina_detectada)}} • ${{escapeHtml(r.pacote_entrega)}}</div>
           <div class="meta">${{escapeHtml(r.status_exibicao)}}</div>
+          <div class="meta">extração: ${{escapeHtml(r.extracao_confianca)}} ${{r.possivel_duplicado === 'true' ? '• possível duplicado' : ''}}</div>
         </div>
         <div class="desc">
           <div class="block"><b>Problema:</b> ${{escapeHtml(r.problema_resumo)}}</div>
           <div class="block"><b>Explicação:</b> ${{escapeHtml(r.explicacao_programador)}}</div>
+          <div class="block"><b>Confiança:</b> ${{escapeHtml(r.motivo_confianca)}}</div>
           <div class="block"><b>Ação:</b> ${{escapeHtml(r.o_que_fazer)}}</div>
           <div class="block"><b>Como no Revit:</b> ${{escapeHtml(r.como_no_revit)}}</div>
         </div>
@@ -919,12 +944,14 @@ function renderTasks(){{
 }}
 
 function openImageModal(row){{
-  $('modalTitle').textContent = (row.escola_curta || 'Escola') + ' • item ' + (row.item_detectado || '-');
+  const itemLabel = row.item_detectado || row.item_rotulo_detectado || '-';
+  $('modalTitle').textContent = (row.escola_curta || 'Escola') + ' • item ' + itemLabel;
   $('modalMeta').textContent = (row.imagem_origem_pdf || '-') + ' • pag. ' + (row.imagem_origem_pagina || '-') + ' • conf. ' + (row.imagem_confianca || '-');
   $('modalImage').src = safeImagePath(row.imagem_modal_relpath || row.imagem_preview_relpath);
   const steps = Array.isArray(row.passo_a_passo_revit) ? row.passo_a_passo_revit : [];
   $('modalInfo').innerHTML = `
     <div class="block"><b>Problema no laudo:</b> ${{escapeHtml(row.problema_resumo)}}</div>
+    <div class="block"><b>Confiança da extração:</b> ${{escapeHtml(row.extracao_confianca)}} - ${{escapeHtml(row.motivo_confianca)}}${{row.possivel_duplicado === 'true' ? ' - possível duplicado' : ''}}</div>
     <div class="block"><b>Explicação para programador:</b> ${{escapeHtml(row.explicacao_programador)}}</div>
     <div class="block"><b>Contexto:</b> ${{escapeHtml(row.contexto_arquitetura)}}</div>
     <div class="block"><b>Onde conferir no Revit:</b> ${{escapeHtml(row.onde_ver_no_revit)}}</div>
@@ -966,6 +993,9 @@ function renderBreakdowns(){{
   if (state.tab === 'ativos') {{
     bars('owners', data.breakdowns.owners_ativos);
     bars('packages', data.breakdowns.pacotes_ativos);
+  }} else if (state.tab === 'auditoria') {{
+    bars('owners', data.breakdowns.confianca_auditoria);
+    bars('packages', data.breakdowns.disciplinas_desativados);
   }} else {{
     bars('owners', data.breakdowns.disciplinas_desativados);
     bars('packages', data.breakdowns.disciplinas_desativados);
